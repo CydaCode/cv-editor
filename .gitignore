@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.local
+.DS_Store
+*.log
+dist/
+build/
+.next/
+uploads/
+backend/uploads/
+*.pdf
+*.docx
+
