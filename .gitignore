@@ -10,4 +10,5 @@ uploads/
 backend/uploads/
 *.pdf
 *.docx
-
+ENV_SETUP.md
+ENV_VARIABLES.md

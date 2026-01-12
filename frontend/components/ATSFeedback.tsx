@@ -36,7 +36,7 @@ export default function ATSFeedback({
   const [reanalyzing, setReanalyzing] = useState(false)
   const toast = useToast()
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+  const API_URL = process.env.NEXT_PUBLIC_API_URL 
 
   const handleReanalyze = async () => {
     setReanalyzing(true)
@@ -260,10 +260,12 @@ export default function ATSFeedback({
                 )}
               </List>
             ) : (
-              <Text color="green.500">
-                <ListIcon as={CheckCircleIcon} color="green.500" />
-                No formatting issues detected. Your CV formatting is ATS-friendly.
-              </Text>
+              <HStack spacing={2}>
+                <CheckCircleIcon color="green.500" />
+                <Text color="green.500">
+                  No formatting issues detected. Your CV formatting is ATS-friendly.
+                </Text>
+              </HStack>
             )}
           </AccordionPanel>
         </AccordionItem>
