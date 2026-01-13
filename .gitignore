@@ -12,3 +12,4 @@ backend/uploads/
 *.docx
 ENV_SETUP.md
 ENV_VARIABLES.md
+SETUP.md

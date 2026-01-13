@@ -1,28 +1,12 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import { parseFile } from '../services/fileParser.js';
+import { parseFileFromBuffer } from '../services/fileParser.js';
 import CV from '../models/CV.js';
 import atsAnalyzer from '../services/atsAnalyzer.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { uploadToS3 } from '../services/s3Client.js';
 
 const router = express.Router();
-
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadPath = join(__dirname, '../uploads');
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
 
 const fileFilter = (req, file, cb) => {
   const allowedTypes = /pdf|docx/;
@@ -38,9 +22,9 @@ const fileFilter = (req, file, cb) => {
 };
 
 const upload = multer({
-  storage: storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-  fileFilter: fileFilter
+  fileFilter: fileFilter,
 });
 
 // Upload CV endpoint
@@ -50,19 +34,24 @@ router.post('/', upload.single('cv'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const filePath = req.file.path;
+    const fileBuffer = req.file.buffer;
     const fileType = path.extname(req.file.originalname).slice(1).toLowerCase();
     const userId = req.body.userId || null;
 
-    // Parse the file
-    const parsedData = await parseFile(filePath, fileType);
+    // Upload to S3
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const s3Key = `uploads/${uniqueSuffix}${path.extname(req.file.originalname)}`;
+    const s3Result = await uploadToS3(fileBuffer, s3Key, req.file.mimetype);
+
+    // Parse the file from buffer
+    const parsedData = await parseFileFromBuffer(fileBuffer, fileType);
     const content = parsedData.text || '';
 
     // Create CV document
     const cv = new CV({
       userId,
       originalFileName: req.file.originalname,
-      filePath: filePath,
+      filePath: s3Result.key,
       fileType: fileType,
       content: content,
       editedContent: content
