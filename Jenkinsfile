@@ -68,13 +68,24 @@ EOF
                     string(credentialsId: 'EC2_USER', variable: 'EC2_USER')
                 ]) {
                     sshagent(credentials: ['EC2_SSH_KEY']) {
-                        sh """
-                        ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
-                            mkdir -p ${APP_DIR}
-                            rm -rf ${APP_DIR}/*
-                        '
-                        scp -r build/* ${EC2_USER}@${EC2_HOST}:${APP_DIR}
-                        """
+                        sh '''
+                        echo "Starting deployment to EC2..."
+
+                        # Ensure target subdirectories exist
+                        ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "mkdir -p /var/www/cv-editor/backend /var/www/cv-editor/frontend"
+
+                        # Deploy backend
+                        rsync -avz --delete \
+                            build/backend/ \
+                            $EC2_USER@$EC2_HOST:/var/www/cv-editor/backend/
+
+                        # Deploy frontend
+                        rsync -avz --delete \
+                            build/frontend/ \
+                            $EC2_USER@$EC2_HOST:/var/www/cv-editor/frontend/
+
+                        echo "Deployment completed safely!"
+                    '''
                     }
                 }
             }
