@@ -37,21 +37,15 @@ EOF
             }
         }
 
-        stage('Install Frontend Dependencies') {
+        stage('Install & build Frontend Dependencies') {
             steps {
                 dir('frontend') {
-                    sh 'yarn install --frozen-lockfile'
+                    sh 'npm ci'
+                    sh 'npm run build'
                 }
             }
         }
 
-        stage('Build Frontend') {
-            steps {
-                dir('frontend') {
-                    sh 'yarn build'
-                }
-            }
-        }
 
         stage('Package Application') {
             steps {
