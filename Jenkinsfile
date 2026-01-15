@@ -67,14 +67,19 @@ EOF
 
         stage('Deploy to EC2') {
             steps {
-                sshagent(credentials: ['EC2_SSH_KEY']) {
-                    sh """
-                    ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
-                        mkdir -p ${APP_DIR}
-                        rm -rf ${APP_DIR}/*
-                    '
-                    scp -r build/* ${EC2_USER}@${EC2_HOST}:${APP_DIR}
-                    """
+                withCredentials([
+                    string(credentialsId: 'EC2_HOST', variable: 'EC2_HOST'),
+                    string(credentialsId: 'EC2_USER', variable: 'EC2_USER')
+                ]) {
+                    sshagent(credentials: ['EC2_SSH_KEY']) {
+                        sh """
+                        ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
+                            mkdir -p ${APP_DIR}
+                            rm -rf ${APP_DIR}/*
+                        '
+                        scp -r build/* ${EC2_USER}@${EC2_HOST}:${APP_DIR}
+                        """
+                    }
                 }
             }
         }
