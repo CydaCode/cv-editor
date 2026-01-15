@@ -41,7 +41,9 @@ EOF
             steps {
                 dir('frontend') {
                     sh 'npm ci'
+                    sh 'npm install --save-dev eslint'
                     sh 'npm run build'
+
                 }
             }
         }
@@ -54,7 +56,7 @@ EOF
                 mkdir -p build
                 cp -r backend build/
                 cp -r frontend/.next build/frontend
-                cp -r frontend/public build/frontend
+                
                 '''
             }
         }
