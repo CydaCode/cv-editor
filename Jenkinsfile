@@ -5,7 +5,7 @@ pipeline {
         APP_NAME = "cv-editor"
         APP_DIR = "/home/ubuntu/cv-editor"
         EC2_USER = 'ubuntu'
-        EC2_HOST = '54.162.172.209'
+        EC2_HOST = '54.221.75.127'
     }
 
     stages {
