@@ -132,11 +132,28 @@ EOF
             }
         }
 
+        stage('Start Frontend') {
+            steps {
+                sshagent(credentials: ['EC2_SSH_KEY']) {
+                    sh """
+                    ssh ${EC2_USER}@${EC2_HOST} '
+                        cd ${APP_DIR}/frontend
+                        npm ci --omit=dev
+                        pm2 delete frontend || true
+                        pm2 start npm --name frontend -- start
+                        pm2 save
+                    '
+                    """
+                }
+            }
+        }
+
         stage('Health Check') {
             steps {
                 sh """
                 sleep 10
                 curl -f http://${EC2_HOST}:5000/api/health
+                curl -f http://${EC2_HOST}:3000
                 """
             }
         }
