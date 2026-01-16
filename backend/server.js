@@ -46,7 +46,7 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'CV Editor API is running' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
