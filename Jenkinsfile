@@ -42,6 +42,7 @@ EOF
         stage('Install & build Frontend Dependencies') {
             steps {
                 dir('frontend') {
+                    sh 'npm install'
                     sh 'npm ci'
                     sh 'npm install --save-dev eslint'
                     sh 'npm run build'
