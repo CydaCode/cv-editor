@@ -13,3 +13,4 @@ backend/uploads/
 ENV_SETUP.md
 ENV_VARIABLES.md
 SETUP.md
+S3_SECURITY.md
