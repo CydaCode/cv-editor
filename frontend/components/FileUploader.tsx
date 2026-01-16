@@ -19,7 +19,7 @@ export default function FileUploader({ onUploadSuccess }: FileUploaderProps) {
   const [progress, setProgress] = useState(0)
   const toast = useToast()
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+  const API_URL = process.env.NEXT_PUBLIC_API_URL
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

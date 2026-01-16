@@ -33,7 +33,7 @@ export default function CVEditor({
   const [analyzing, setAnalyzing] = useState(false)
   const toast = useToast()
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+  const API_URL = process.env.NEXT_PUBLIC_API_URL
 
   useEffect(() => {
     setContent(cvData.editedContent || cvData.content)

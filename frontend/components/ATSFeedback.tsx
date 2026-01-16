@@ -36,7 +36,7 @@ export default function ATSFeedback({
   const [reanalyzing, setReanalyzing] = useState(false)
   const toast = useToast()
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+  const API_URL = process.env.NEXT_PUBLIC_API_URL 
 
   const handleReanalyze = async () => {
     setReanalyzing(true)
