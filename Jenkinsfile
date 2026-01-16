@@ -34,7 +34,8 @@ EOF
         stage('Install Backend Dependencies') {
             steps {
                 dir('backend') {
-                    sh 'npm ci'
+                    sh 'npm install'
+                   
                 }
             }
         }
@@ -42,7 +43,6 @@ EOF
         stage('Install & build Frontend Dependencies') {
             steps {
                 dir('frontend') {
-                    sh 'npm install'
                     sh 'npm ci'
                     sh 'npm install --save-dev eslint'
                     sh 'npm run build'
@@ -140,7 +140,7 @@ EOF
                         cd ${APP_DIR}/frontend
                         npm ci --omit=dev
                         pm2 delete cv-editor-frontend || true
-                        pm2 start "npm run start" --name cv-editor-frontend
+                        pm2 start npm --name cv-editor-frontend -- run start
                         pm2 save
                     '
                     """
