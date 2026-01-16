@@ -4,6 +4,8 @@ pipeline {
     environment {
         APP_NAME = "cv-editor"
         APP_DIR = "/var/www/cv-editor"
+        EC2_USER = 'ubuntu'
+        EC2_HOST = '13.222.44.253'
     }
 
     stages {
@@ -61,32 +63,28 @@ EOF
             }
         }
 
-        stage('Deploy to EC2') {
+        stage('Deploy Application') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'EC2_HOST', variable: 'EC2_HOST'),
-                    string(credentialsId: 'EC2_USER', variable: 'EC2_USER')
-                ]) {
-                    sshagent(credentials: ['EC2_SSH_KEY']) {
-                        sh '''
-                        echo "Starting deployment to EC2..."
+                sshagent(credentials: ['EC2_SSH_KEY']) {
+                    sh '''
+                    echo "Starting deployment..."
 
-                        # Ensure target subdirectories exist
-                        ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "mkdir -p /var/www/cv-editor/backend /var/www/cv-editor/frontend"
+                    # Ensure target subdirectories exist
+                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST \
+                        "mkdir -p /var/www/cv-editor/backend /var/www/cv-editor/frontend"
 
-                        # Deploy backend
-                        rsync -avz --delete \
-                            build/backend/ \
-                            $EC2_USER@$EC2_HOST:/var/www/cv-editor/backend/
+                    # Deploy backend
+                    rsync -avz --delete \
+                        build/backend/ \
+                        $EC2_USER@$EC2_HOST:/var/www/cv-editor/backend/
 
-                        # Deploy frontend
-                        rsync -avz --delete \
-                            build/frontend/ \
-                            $EC2_USER@$EC2_HOST:/var/www/cv-editor/frontend/
+                    # Deploy frontend
+                    rsync -avz --delete \
+                        build/frontend/ \
+                        $EC2_USER@$EC2_HOST:/var/www/cv-editor/frontend/
 
-                        echo "Deployment completed safely!"
+                    echo "Deployment completed safely!"
                     '''
-                    }
                 }
             }
         }
