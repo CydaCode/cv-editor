@@ -57,8 +57,7 @@ EOF
                 rm -rf build
                 mkdir -p build
                 cp -r backend build/
-                cp -r frontend/.next build/frontend
-                
+                cp -r frontend build/frontend
                 '''
             }
         }
@@ -139,8 +138,8 @@ EOF
                     ssh ${EC2_USER}@${EC2_HOST} '
                         cd ${APP_DIR}/frontend
                         npm ci --omit=dev
-                        pm2 delete frontend || true
-                        pm2 start npm --name frontend -- start
+                        pm2 delete cv-editor-frontend || true
+                        pm2 start "npm run start" --name cv-editor-frontend
                         pm2 save
                     '
                     """
