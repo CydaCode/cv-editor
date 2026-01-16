@@ -1,31 +1,47 @@
-import natural from 'natural';
-
-const { WordNet, TfIdf } = natural;
-
-export class ATSAnalyzer {
+export class DevOpsATSAnalyzer {
   constructor() {
-    // Common ATS keywords by category
     this.requiredSections = [
-      'work experience',
-      'education',
+      'experience',
       'skills',
-      'contact',
-      'summary',
-      'objective'
+      'projects',
+      'education'
     ];
 
-    this.commonKeywords = [
-      'leadership', 'management', 'communication', 'teamwork',
-      'problem solving', 'analytical', 'strategic', 'project management',
-      'collaboration', 'innovation', 'results-driven', 'detail-oriented'
+    this.impactKeywords = [
+      'automated', 'reduced', 'improved', 'optimized',
+      'scaled', 'secured', 'migrated', 'deployed'
     ];
 
-    this.jobTitleKeywords = {
-      'software engineer': ['programming', 'development', 'coding', 'software', 'algorithm', 'debugging'],
-      'data scientist': ['machine learning', 'data analysis', 'python', 'statistics', 'modeling'],
-      'product manager': ['product', 'strategy', 'roadmap', 'stakeholder', 'agile', 'scrum'],
-      'marketing': ['marketing', 'campaign', 'brand', 'social media', 'SEO', 'analytics'],
-      'sales': ['sales', 'revenue', 'client', 'customer', 'negotiation', 'relationship']
+    this.devopsKeywordGroups = {
+      cicd: [
+        'jenkins', 'github actions', 'gitlab ci', 'circleci', 'argocd'
+      ],
+      containers: [
+        'docker', 'kubernetes', 'helm', 'containerd'
+      ],
+      cloud: [
+        'aws', 'ec2', 's3', 'iam', 'eks',
+        'azure', 'gcp'
+      ],
+      infrastructure: [
+        'terraform', 'cloudformation', 'pulumi'
+      ],
+      configuration: [
+        'ansible', 'chef', 'puppet'
+      ],
+      monitoring: [
+        'prometheus', 'grafana', 'elk', 'datadog'
+      ],
+      security: [
+        'iam', 'secrets', 'vault', 'trivy'
+      ],
+      osNetworking: [
+        'linux', 'bash', 'tcp/ip', 'dns', 'nginx'
+      ],
+      practices: [
+        'gitops', 'blue green', 'canary',
+        'automation', 'scalability', 'high availability'
+      ]
     };
   }
 
@@ -36,9 +52,9 @@ export class ATSAnalyzer {
       maxScore: 100,
       feedback: {
         sections: {},
-        keywords: {},
+        devopsSkills: {},
+        impact: {},
         formatting: {},
-        readability: {},
         recommendations: []
       }
     };
@@ -48,20 +64,20 @@ export class ATSAnalyzer {
     analysis.feedback.sections = sectionScore;
     analysis.score += sectionScore.score;
 
-    // Check keyword density
-    const keywordScore = this.checkKeywords(text);
-    analysis.feedback.keywords = keywordScore;
-    analysis.score += keywordScore.score;
+    // Check DevOps skills coverage
+    const skillScore = this.checkDevOpsSkills(text);
+    analysis.feedback.devopsSkills = skillScore;
+    analysis.score += skillScore.score;
+
+    // Check impact / results language
+    const impactScore = this.checkImpact(text);
+    analysis.feedback.impact = impactScore;
+    analysis.score += impactScore.score;
 
     // Check formatting issues
     const formattingScore = this.checkFormatting(content);
     analysis.feedback.formatting = formattingScore;
     analysis.score += formattingScore.score;
-
-    // Check readability
-    const readabilityScore = this.checkReadability(content);
-    analysis.feedback.readability = readabilityScore;
-    analysis.score += readabilityScore.score;
 
     // Generate recommendations
     analysis.feedback.recommendations = this.generateRecommendations(analysis.feedback);
@@ -96,47 +112,70 @@ export class ATSAnalyzer {
       }
     });
 
-    const score = (foundSections.length / this.requiredSections.length) * 30;
+    // Max 25 points for sections
+    const score = (foundSections.length / this.requiredSections.length) * 25;
     
     return {
       found: foundSections,
       missing: missingSections,
       score: Math.round(score),
-      maxScore: 30
+      maxScore: 25
     };
   }
 
-  checkKeywords(text) {
-    const foundKeywords = [];
-    const missingKeywords = [];
-    const keywordCounts = {};
+  checkDevOpsSkills(text) {
+    const groupResults = {};
+    let totalKeywordsFound = 0;
+    let groupsWithCoverage = 0;
 
-    this.commonKeywords.forEach(keyword => {
-      const regex = new RegExp(`\\b${keyword.replace(/\s+/g, '[\\s-]?')}\\b`, 'gi');
-      const matches = text.match(regex);
-      const count = matches ? matches.length : 0;
-      
-      keywordCounts[keyword] = count;
-      
-      if (count > 0) {
-        foundKeywords.push({ keyword, count });
-      } else {
-        missingKeywords.push(keyword);
+    Object.entries(this.devopsKeywordGroups).forEach(([groupName, keywords]) => {
+      const found = [];
+      const missing = [];
+
+      keywords.forEach((keyword) => {
+        const pattern = keyword.replace(/\s+/g, '[\\s-]?');
+        const regex = new RegExp(`\\b${pattern}\\b`, 'gi');
+        const matches = text.match(regex);
+        const count = matches ? matches.length : 0;
+
+        if (count > 0) {
+          found.push({ keyword, count });
+          totalKeywordsFound += count;
+        } else {
+          missing.push(keyword);
+        }
+      });
+
+      if (found.length > 0) {
+        groupsWithCoverage += 1;
       }
+
+      groupResults[groupName] = {
+        found,
+        missing,
+      };
     });
 
-    // Calculate keyword density score (max 30 points)
-    const totalKeywords = foundKeywords.reduce((sum, item) => sum + item.count, 0);
-    const keywordDensity = (totalKeywords / (text.split(/\s+/).length / 100)) || 0;
-    const score = Math.min(30, Math.round(keywordDensity * 2 + (foundKeywords.length / this.commonKeywords.length) * 10));
+    const totalGroups = Object.keys(this.devopsKeywordGroups).length;
+
+    // Skill score (max 45):
+    // - 25 points for breadth across groups
+    // - 20 points for overall keyword count / density
+    const breadthScore = (groupsWithCoverage / totalGroups) * 25;
+    const wordCount = text.split(/\s+/).filter(Boolean).length || 1;
+    const density = (totalKeywordsFound / wordCount) * 100; // keywords per 100 words
+    const densityScore = Math.min(20, density); // cap at 20
+
+    const score = Math.round(Math.min(45, breadthScore + densityScore));
 
     return {
-      found: foundKeywords,
-      missing: missingKeywords,
-      keywordCounts,
-      density: keywordDensity.toFixed(2),
-      score: Math.round(score),
-      maxScore: 30
+      groups: groupResults,
+      totalKeywordsFound,
+      groupsWithCoverage,
+      totalGroups,
+      density: density.toFixed(2),
+      score,
+      maxScore: 45,
     };
   }
 
@@ -208,44 +247,33 @@ export class ATSAnalyzer {
     };
   }
 
-  checkReadability(content) {
-    const sentences = content.match(/[.!?]+/g) || [];
-    const words = content.split(/\s+/).filter(w => w.length > 0);
-    const paragraphs = content.split(/\n\n+/).filter(p => p.trim().length > 0);
+  checkImpact(text) {
+    let impactCount = 0;
+    const found = [];
+    const missing = [];
 
-    const avgWordsPerSentence = words.length / Math.max(sentences.length, 1);
-    const avgSentencesPerParagraph = sentences.length / Math.max(paragraphs.length, 1);
+    this.impactKeywords.forEach((keyword) => {
+      const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
+      const matches = text.match(regex);
+      const count = matches ? matches.length : 0;
 
-    let score = 20; // Start with full points
+      if (count > 0) {
+        impactCount += count;
+        found.push({ keyword, count });
+      } else {
+        missing.push(keyword);
+      }
+    });
 
-    // Ideal: 15-20 words per sentence
-    if (avgWordsPerSentence > 25) {
-      score -= 5;
-    } else if (avgWordsPerSentence < 10) {
-      score -= 3;
-    }
-
-    // Ideal: 3-5 sentences per paragraph
-    if (avgSentencesPerParagraph > 8) {
-      score -= 3;
-    } else if (avgSentencesPerParagraph < 2) {
-      score -= 2;
-    }
-
-    // Check for bullet points (good for readability)
-    const bulletPoints = (content.match(/[•\-\*]\s+/g) || []).length;
-    if (bulletPoints < 5 && words.length > 200) {
-      score -= 2;
-    }
+    // Max 10 points for impact language
+    const score = Math.min(10, impactCount * 2);
 
     return {
-      avgWordsPerSentence: avgWordsPerSentence.toFixed(1),
-      avgSentencesPerParagraph: avgSentencesPerParagraph.toFixed(1),
-      totalWords: words.length,
-      totalSentences: sentences.length,
-      totalParagraphs: paragraphs.length,
-      score: Math.max(0, score),
-      maxScore: 20
+      found,
+      missing,
+      totalImpactTerms: impactCount,
+      score,
+      maxScore: 10,
     };
   }
 
@@ -261,13 +289,27 @@ export class ATSAnalyzer {
       });
     }
 
-    // Keyword recommendations
-    if (feedback.keywords.missing.length > 0) {
-      const topMissing = feedback.keywords.missing.slice(0, 5);
+    // DevOps skills (breadth) recommendations
+    if (feedback.devopsSkills && feedback.devopsSkills.groups) {
+      const weakGroups = Object.entries(feedback.devopsSkills.groups)
+        .filter(([, value]) => value.found.length === 0)
+        .map(([name]) => name);
+
+      if (weakGroups.length > 0) {
+        recommendations.push({
+          type: 'skills',
+          priority: 'high',
+          message: `Add concrete experience for these DevOps areas: ${weakGroups.join(', ')}`
+        });
+      }
+    }
+
+    // Impact language recommendations
+    if (feedback.impact && feedback.impact.missing && feedback.impact.totalImpactTerms === 0) {
       recommendations.push({
-        type: 'keyword',
+        type: 'impact',
         priority: 'medium',
-        message: `Consider adding these keywords: ${topMissing.join(', ')}`
+        message: 'Use impact-focused verbs (e.g. automated, reduced, improved, optimized) to describe your results'
       });
     }
 
@@ -280,26 +322,9 @@ export class ATSAnalyzer {
       });
     }
 
-    // Readability recommendations
-    if (feedback.readability.avgWordsPerSentence > 25) {
-      recommendations.push({
-        type: 'readability',
-        priority: 'medium',
-        message: 'Consider breaking down long sentences for better readability'
-      });
-    }
-
-    if (feedback.keywords.density < 1) {
-      recommendations.push({
-        type: 'keyword',
-        priority: 'high',
-        message: 'Increase keyword density by naturally incorporating relevant industry terms'
-      });
-    }
-
     return recommendations;
   }
 }
 
-export default new ATSAnalyzer();
+export default new DevOpsATSAnalyzer();
 
