@@ -31,22 +31,13 @@ EOF
             }
         }
 
-        stage('Install Backend Dependencies') {
-            steps {
-                dir('backend') {
-                    sh 'npm install'
-                   
-                }
-            }
-        }
-
-        stage('Install & build Frontend Dependencies') {
+        stage('Build Frontend') {
             steps {
                 dir('frontend') {
-                    sh 'npm ci'
-                    sh 'npm install --save-dev eslint'
-                    sh 'npm run build'
-
+                    sh '''
+                    npm ci
+                    npm run build
+                    '''
                 }
             }
         }
@@ -58,7 +49,8 @@ EOF
                 rm -rf build
                 mkdir -p build
                 cp -r backend build/
-                cp -r frontend build/frontend
+                cp -r frontend/.next build/frontend
+                cp frontend/package.json build/frontend/
                 '''
             }
         }
@@ -75,13 +67,20 @@ EOF
 
                     # Deploy backend
                     rsync -avz --delete \
-                        build/backend/ \
-                        $EC2_USER@$EC2_HOST:/home/ubuntu/cv-editor/backend/
+                    --exclude node_modules \
+                    --exclude .git \
+                    --exclude .env \
+                    build/backend/ \
+                    $EC2_USER@$EC2_HOST:/home/ubuntu/cv-editor/backend/
+
 
                     # Deploy frontend
                     rsync -avz --delete \
-                        build/frontend/ \
-                        $EC2_USER@$EC2_HOST:/home/ubuntu/cv-editor/frontend/
+                    --exclude node_modules \
+                    --exclude .git \
+                    build/frontend/ \
+                    $EC2_USER@$EC2_HOST:/home/ubuntu/cv-editor/frontend/
+
 
                     echo "Deployment completed safely!"
                     '''
@@ -137,10 +136,10 @@ EOF
                 sshagent(credentials: ['EC2_SSH_KEY']) {
                     sh """
                     ssh ${EC2_USER}@${EC2_HOST} '
-                        cd ${APP_DIR}/frontend
+                        cd ${APP_DIR}/backend
                         npm ci --omit=dev
-                        pm2 delete cv-editor-frontend || true
-                        pm2 start npm --name cv-editor-frontend -- run start
+                        pm2 delete ${APP_NAME} || true
+                        pm2 start server.js --name ${APP_NAME}
                         pm2 save
                     '
                     """
