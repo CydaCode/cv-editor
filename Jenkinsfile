@@ -136,10 +136,10 @@ EOF
                 sshagent(credentials: ['EC2_SSH_KEY']) {
                     sh """
                     ssh ${EC2_USER}@${EC2_HOST} '
-                        cd ${APP_DIR}/backend
+                        cd ${APP_DIR}/frontend
                         npm ci --omit=dev
-                        pm2 delete ${APP_NAME} || true
-                        pm2 start server.js --name ${APP_NAME}
+                        pm2 delete cv-editor-frontend || true
+                        pm2 start npm --name cv-editor-frontend -- run start
                         pm2 save
                     '
                     """
