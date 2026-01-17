@@ -49,8 +49,7 @@ EOF
                 rm -rf build
                 mkdir -p build
                 cp -r backend build/
-                cp -r frontend/.next build/frontend
-                cp frontend/package.json build/frontend/
+                cp -r frontend build/
                 '''
             }
         }
