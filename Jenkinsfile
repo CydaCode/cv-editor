@@ -114,18 +114,37 @@ EOF
             }
         }
 
-        stage('Start Backend') {
+        stage('Start Backend (nohup)') {
             steps {
                 sshagent(credentials: ['EC2_SSH_KEY']) {
-                    sh """
-                    ssh ${EC2_USER}@${EC2_HOST} '
-                        cd ${APP_DIR}/backend
-                        npm ci --omit=dev
-                        pm2 delete ${APP_NAME} || true
-                        pm2 start server.js --name ${APP_NAME}
-                        pm2 save
-                    '
-                    """
+                    withCredentials([
+                        string(credentialsId: 'MONGODB_URI', variable: 'MONGO_URI'),
+                        string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_KEY'),
+                        string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET'),
+                        string(credentialsId: 'S3_BUCKET', variable: 'S3_BUCKET')
+                    ]) {
+                        sh """
+                        ssh ${EC2_USER}@${EC2_HOST} '
+                            cd ${APP_DIR}/backend
+                            npm ci --omit=dev
+
+                            # Stop any process on port 5000
+                            lsof -t -i:5000 | xargs -r kill -9
+
+                            # Start backend in background with env vars
+                            nohup env \\
+                                NODE_ENV=production \\
+                                PORT=5000 \\
+                                MONGODB_URI=${MONGO_URI} \\
+                                AWS_REGION=us-east-1 \\
+                                AWS_ACCESS_KEY_ID=${AWS_KEY} \\
+                                AWS_SECRET_ACCESS_KEY=${AWS_SECRET} \\
+                                S3_BUCKET_NAME=${S3_BUCKET} \\
+                                node server.js > backend.log 2>&1 &
+                            echo "Backend started with nohup, logs at backend.log"
+                        '
+                        """
+                    }
                 }
             }
         }
