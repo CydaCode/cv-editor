@@ -4,109 +4,100 @@ pipeline {
     environment {
         APP_NAME = "cv-editor"
         APP_DIR = "/home/ubuntu/cv-editor"
-        EC2_USER = 'ubuntu'
-        EC2_HOST = '54.221.75.127'
+        AWS_REGION = "us-east-1"
     }
+
 
     stages {
         stage('Checkout Source Code') {
             steps {
-                git branch: 'solution',
+                git branch: 'solution-stage2',
                     url: 'https://github.com/CydaCode/cv-editor.git'
             }
         }
 
-        stage('Prepare Frontend Env') {
+        stage('Build & Push Docker Images to ECR') {
             steps {
                 withCredentials([
-                    string(credentialsId: 'API_URL', variable: 'API_URL'),
-                    string(credentialsId: 'S3_BUCKET', variable: 'S3_BUCKET')
+                    string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_KEY'),
+                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET'),
+                    string(credentialsId: 'AWS_ACCOUNT_ID', variable: 'AWS_ACCOUNT')
                 ]) {
                     sh """
-                    cat <<EOF > frontend/.env.production
-NEXT_PUBLIC_API_URL=${API_URL}
-EOF
+                        export AWS_ACCESS_KEY_ID=${AWS_KEY}
+                        export AWS_SECRET_ACCESS_KEY=${AWS_SECRET}
+                        export AWS_DEFAULT_REGION=${AWS_REGION}
+
+                        # Login to ECR
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                        docker login --username AWS --password-stdin \
+                        ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+                        # Build Backend
+                        docker build -t ${APP_NAME}-backend ./backend
+                        docker tag ${APP_NAME}-backend:latest \
+                        ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}-backend:latest
+
+                        # Build Frontend
+                        docker build -t ${APP_NAME}-frontend ./frontend
+                        docker tag ${APP_NAME}-frontend:latest \
+                        ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}-frontend:latest
+
+                        # Push Images
+                        docker push ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}-backend:latest
+                        docker push ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}-frontend:latest
                     """
                 }
             }
         }
 
-        stage('Build Frontend') {
-            steps {
-                dir('frontend') {
-                    sh '''
-                    npm ci
-                    npm run build
-                    '''
-                }
-            }
-        }
-
-
-        stage('Package Application') {
-            steps {
-                sh '''
-                rm -rf build
-                mkdir -p build
-                cp -r backend build/
-                cp -r frontend build/
-                '''
-            }
-        }
-
-        stage('Deploy Application') {
-            steps {
-                sshagent(credentials: ['EC2_SSH_KEY']) {
-                    sh '''
-                    echo "Starting deployment..."
-
-                    # Ensure target subdirectories exist
-                    ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST \
-                        "mkdir -p /home/ubuntu/cv-editor/backend /home/ubuntu/cv-editor/frontend"
-
-                    # Deploy backend
-                    rsync -avz --delete \
-                    --exclude node_modules \
-                    --exclude .git \
-                    --exclude .env \
-                    build/backend/ \
-                    $EC2_USER@$EC2_HOST:/home/ubuntu/cv-editor/backend/
-
-
-                    # Deploy frontend
-                    rsync -avz --delete \
-                    --exclude node_modules \
-                    --exclude .git \
-                    build/frontend/ \
-                    $EC2_USER@$EC2_HOST:/home/ubuntu/cv-editor/frontend/
-
-
-                    echo "Deployment completed safely!"
-                    '''
-                }
-            }
-        }
-
-        stage('Configure Backend Environment') {
+        stage('Deploy Backend (Private EC2 via Bastion)') {
             steps {
                 sshagent(credentials: ['EC2_SSH_KEY']) {
                     withCredentials([
                         string(credentialsId: 'MONGODB_URI', variable: 'MONGO_URI'),
+                        string(credentialsId: 'S3_BUCKET', variable: 'S3_BUCKET'),
                         string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_KEY'),
                         string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET'),
-                        string(credentialsId: 'S3_BUCKET', variable: 'S3_BUCKET')
+                        string(credentialsId: 'AWS_ACCOUNT_ID', variable: 'AWS_ACCOUNT'),
+                        string(credentialsId: 'EC2_USER', variable: 'EC2_USER'),
+                        string(credentialsId: 'BACKEND_HOST', variable: 'BACKEND_HOST'),
+                        string(credentialsId: 'BASTION_HOST', variable: 'BASTION_HOST')
                     ]) {
+
                         sh """
-                        ssh ${EC2_USER}@${EC2_HOST} '
-                            cat <<EOF > ${APP_DIR}/backend/.env
-NODE_ENV=production
-PORT=5000
-MONGODB_URI=${MONGO_URI}
-AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=${AWS_KEY}
-AWS_SECRET_ACCESS_KEY=${AWS_SECRET}
-S3_BUCKET_NAME=${S3_BUCKET}
-EOF
+                        ssh -o StrictHostKeyChecking=no \
+                            -J ${EC2_USER}@${BASTION_HOST} \
+                            ${EC2_USER}@${BACKEND_HOST} '
+                            mkdir -p ${APP_DIR}/backend
+
+                            # Login to ECR
+                            export AWS_ACCESS_KEY_ID=${AWS_KEY}
+                            export AWS_SECRET_ACCESS_KEY=${AWS_SECRET}
+                            export AWS_DEFAULT_REGION=${AWS_REGION}
+
+                            aws ecr get-login-password --region ${AWS_REGION} | \
+                            docker login --username AWS --password-stdin \
+                            ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+                            # Pull Latest Image
+                            docker pull ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}-backend:latest
+
+                            # Stop Old Container
+                            docker rm -f ${APP_NAME}-backend || true
+
+                            # Run Backend Container
+                            docker run -d \
+                                --name ${APP_NAME}-backend \
+                                -e NODE_ENV=production \
+                                -e PORT=5000 \
+                                -e MONGODB_URI=${MONGO_URI} \
+                                -e AWS_REGION=${AWS_REGION} \
+                                -e AWS_ACCESS_KEY_ID=${AWS_KEY} \
+                                -e AWS_SECRET_ACCESS_KEY=${AWS_SECRET} \
+                                -e S3_BUCKET_NAME=${S3_BUCKET} \
+                                -p 5000:5000 \
+                                ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}-backend:latest
                         '
                         """
                     }
@@ -114,34 +105,40 @@ EOF
             }
         }
 
-        stage('Start Backend (nohup)') {
+
+
+        stage('Deploy Frontend (Public EC2)') {
             steps {
                 sshagent(credentials: ['EC2_SSH_KEY']) {
                     withCredentials([
-                        string(credentialsId: 'MONGODB_URI', variable: 'MONGO_URI'),
                         string(credentialsId: 'AWS_ACCESS_KEY_ID', variable: 'AWS_KEY'),
                         string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET'),
-                        string(credentialsId: 'S3_BUCKET', variable: 'S3_BUCKET')
+                        string(credentialsId: 'AWS_ACCOUNT_ID', variable: 'AWS_ACCOUNT'),
+                        string(credentialsId: 'EC2_USER', variable: 'EC2_USER'),
+                        string(credentialsId: 'FRONTEND_HOST', variable: 'FRONTEND_HOST'),
+                        string(credentialsId: 'API_URL', variable: 'API_URL')
                     ]) {
+
                         sh """
-                        ssh ${EC2_USER}@${EC2_HOST} '
-                            cd ${APP_DIR}/backend
-                            npm ci --omit=dev
+                        ssh -o StrictHostKeyChecking=no ${EC2_USER}@${FRONTEND_HOST} '
 
-                            # Stop any process on port 5000
-                            lsof -t -i:5000 | xargs -r kill -9
+                            export AWS_ACCESS_KEY_ID=${AWS_KEY}
+                            export AWS_SECRET_ACCESS_KEY=${AWS_SECRET}
+                            export AWS_DEFAULT_REGION=${AWS_REGION}
 
-                            # Start backend in background with env vars
-                            nohup env \\
-                                NODE_ENV=production \\
-                                PORT=5000 \\
-                                MONGODB_URI=${MONGO_URI} \\
-                                AWS_REGION=us-east-1 \\
-                                AWS_ACCESS_KEY_ID=${AWS_KEY} \\
-                                AWS_SECRET_ACCESS_KEY=${AWS_SECRET} \\
-                                S3_BUCKET_NAME=${S3_BUCKET} \\
-                                node server.js > backend.log 2>&1 &
-                            echo "Backend started with nohup, logs at backend.log"
+                            aws ecr get-login-password --region ${AWS_REGION} | \
+                            docker login --username AWS --password-stdin \
+                            ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+                            docker pull ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}-frontend:latest
+
+                            docker rm -f ${APP_NAME}-frontend || true
+
+                            docker run -d \
+                                --name ${APP_NAME}-frontend \
+                                -e NEXT_PUBLIC_API_URL=${API_URL} \
+                                -p 3000:3000 \
+                                ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}-frontend:latest
                         '
                         """
                     }
@@ -149,29 +146,18 @@ EOF
             }
         }
 
-        stage('Start Frontend') {
-            steps {
-                sshagent(credentials: ['EC2_SSH_KEY']) {
-                    sh """
-                    ssh ${EC2_USER}@${EC2_HOST} '
-                        cd ${APP_DIR}/frontend
-                        npm ci --omit=dev
-                        pm2 delete cv-editor-frontend || true
-                        pm2 start npm --name cv-editor-frontend -- run start
-                        pm2 save
-                    '
-                    """
-                }
-            }
-        }
+        
 
         stage('Health Check') {
             steps {
-                sh """
-                sleep 10
-                curl -f http://${EC2_HOST}:5000/api/health
-                curl -f http://${EC2_HOST}:3000
-                """
+                withCredentials([
+                    string(credentialsId: 'FRONTEND_HOST', variable: 'FRONTEND_HOST')
+                ]) {
+                    sh """
+                        sleep 15
+                        curl -f http://${FRONTEND_HOST}:3000
+                    """
+                }
             }
         }
     }
