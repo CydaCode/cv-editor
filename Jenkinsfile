@@ -65,35 +65,44 @@ pipeline {
                         string(credentialsId: 'BASTION_HOST', variable: 'BASTION_HOST')
                     ]) {
 
-                        sh '''
-                        ssh -A \
-                        -o StrictHostKeyChecking=no \
-                        -o UserKnownHostsFile=/dev/null \
-                        -o ProxyCommand="ssh -A -o StrictHostKeyChecking=no \
-                                        -o UserKnownHostsFile=/dev/null \
-                                        -W %h:%p ${EC2_USER}@${BASTION_HOST}" \
-                        ${EC2_USER}@${BACKEND_HOST} << 'EOF'
-                                
-                            set -e
+                        
+                    sh '''
+                    #!/bin/bash
+                    set -e
 
+                    # Create temp known_hosts file inside container
+                    mkdir -p ~/.ssh
+                    touch ~/.ssh/known_hosts
+
+                    # Add bastion and backend hosts to known_hosts
+                    ssh-keyscan -H ${BASTION_HOST} >> ~/.ssh/known_hosts
+                    ssh-keyscan -H ${BACKEND_HOST} >> ~/.ssh/known_hosts
+
+                    # Step 1: SSH to bastion with agent forwarding
+                    ssh -A -o UserKnownHostsFile=~/.ssh/known_hosts \
+                        -o StrictHostKeyChecking=yes \
+                        ${EC2_USER}@${BASTION_HOST} << 'BASTION_EOF'
+
+                        # Step 2: SSH from bastion to private EC2
+                        ssh -A -o UserKnownHostsFile=~/.ssh/known_hosts \
+                            -o StrictHostKeyChecking=yes \
+                            ${EC2_USER}@${BACKEND_HOST} << 'EC2_EOF'
+
+                            echo "Deploying backend on private EC2..."
                             mkdir -p ${APP_DIR}/backend
 
-                            # Login to ECR
                             export AWS_ACCESS_KEY_ID=${AWS_KEY}
                             export AWS_SECRET_ACCESS_KEY=${AWS_SECRET}
                             export AWS_DEFAULT_REGION=${AWS_REGION}
 
+                            # Login to ECR
                             aws ecr get-login-password --region ${AWS_REGION} | \
-                            docker login --username AWS --password-stdin \
-                            ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                                docker login --username AWS --password-stdin \
+                                ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com
 
-                            # Pull Latest Image
+                            # Pull and run backend container
                             docker pull ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}-backend:latest
-
-                            # Stop Old Container
                             docker rm -f ${APP_NAME}-backend || true
-
-                            # Run Backend Container
                             docker run -d \
                                 --name ${APP_NAME}-backend \
                                 -e NODE_ENV=production \
@@ -105,9 +114,12 @@ pipeline {
                                 -e S3_BUCKET_NAME=${S3_BUCKET} \
                                 -p 5000:5000 \
                                 ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}-backend:latest
-                            exit
-EOF
-                        '''
+
+EC2_EOF
+BASTION_EOF
+
+                    echo "Backend deployed successfully!"
+                    '''
                     }
                 }
             }
