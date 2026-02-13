@@ -66,11 +66,14 @@ pipeline {
                     ]) {
 
                         sh '''
-                        ssh -A -o StrictHostKeyChecking=no \
-                            -o UserKnownHostsFile=/dev/null \
-                            -o ProxyJump=${EC2_USER}@${BASTION_HOST} \
-                            ${EC2_USER}@${BACKEND_HOST} <<EOF
-                            
+                        ssh -A \
+                        -o StrictHostKeyChecking=no \
+                        -o UserKnownHostsFile=/dev/null \
+                        -o ProxyCommand="ssh -A -o StrictHostKeyChecking=no \
+                                        -o UserKnownHostsFile=/dev/null \
+                                        -W %h:%p ${EC2_USER}@${BASTION_HOST}" \
+                        ${EC2_USER}@${BACKEND_HOST} << 'EOF'
+                                
                             set -e
 
                             mkdir -p ${APP_DIR}/backend
