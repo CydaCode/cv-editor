@@ -23,7 +23,7 @@ pipeline {
                     string(credentialsId: 'AWS_SECRET_ACCESS_KEY', variable: 'AWS_SECRET'),
                     string(credentialsId: 'AWS_ACCOUNT_ID', variable: 'AWS_ACCOUNT')
                 ]) {
-                    sh """
+                    sh '''
                         export AWS_ACCESS_KEY_ID=${AWS_KEY}
                         export AWS_SECRET_ACCESS_KEY=${AWS_SECRET}
                         export AWS_DEFAULT_REGION=${AWS_REGION}
@@ -46,7 +46,7 @@ pipeline {
                         # Push Images
                         docker push ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}-backend:latest
                         docker push ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}-frontend:latest
-                    """
+                    '''
                 }
             }
         }
@@ -65,10 +65,13 @@ pipeline {
                         string(credentialsId: 'BASTION_HOST', variable: 'BASTION_HOST')
                     ]) {
 
-                        sh """
+                        sh '''
                         ssh -o StrictHostKeyChecking=no \
-                            -J ${EC2_USER}@${BASTION_HOST} \
-                            ${EC2_USER}@${BACKEND_HOST} '
+                            -o ProxyJump=${EC2_USER}@${BASTION_HOST} \
+                            ${EC2_USER}@${BACKEND_HOST} <<EOF
+                            
+                            set -e
+
                             mkdir -p ${APP_DIR}/backend
 
                             # Login to ECR
@@ -98,8 +101,9 @@ pipeline {
                                 -e S3_BUCKET_NAME=${S3_BUCKET} \
                                 -p 5000:5000 \
                                 ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}-backend:latest
-                        '
-                        """
+                            exit
+EOF
+                        '''
                     }
                 }
             }
@@ -119,8 +123,8 @@ pipeline {
                         string(credentialsId: 'API_URL', variable: 'API_URL')
                     ]) {
 
-                        sh """
-                        ssh -o StrictHostKeyChecking=no ${EC2_USER}@${FRONTEND_HOST} '
+                        sh '''
+                        ssh -o StrictHostKeyChecking=no ${EC2_USER}@${FRONTEND_HOST} <<EOF
 
                             export AWS_ACCESS_KEY_ID=${AWS_KEY}
                             export AWS_SECRET_ACCESS_KEY=${AWS_SECRET}
@@ -139,8 +143,8 @@ pipeline {
                                 -e NEXT_PUBLIC_API_URL=${API_URL} \
                                 -p 3000:3000 \
                                 ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}-frontend:latest
-                        '
-                        """
+EOF
+                        '''
                     }
                 }
             }
