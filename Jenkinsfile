@@ -73,18 +73,17 @@ pipeline {
                     mkdir -p ~/.ssh
                     touch ~/.ssh/known_hosts
 
-                    # Add host keys for bastion and backend
+                    # Add host keys for bastion and backend (from Jenkins container)
                     ssh-keyscan -H ${BASTION_HOST} >> ~/.ssh/known_hosts
                     ssh-keyscan -H ${BACKEND_HOST} >> ~/.ssh/known_hosts
 
-                    # Step 1: SSH to bastion
+                    # SSH to bastion and then to private EC2
                     ssh -A -o UserKnownHostsFile=~/.ssh/known_hosts \
                         -o StrictHostKeyChecking=yes \
                         ${EC2_USER}@${BASTION_HOST} << 'BASTION_EOF'
 
-                        # Step 2: SSH to private EC2 from bastion
-                        ssh -A -o UserKnownHostsFile=~/.ssh/known_hosts \
-                            -o StrictHostKeyChecking=yes \
+                        # Inside bastion: disable strict host checking for private EC2
+                        ssh -A -o StrictHostKeyChecking=no \
                             ${EC2_USER}@${BACKEND_HOST} << 'EC2_EOF'
 
                             mkdir -p ${APP_DIR}/backend
