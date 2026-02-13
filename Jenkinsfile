@@ -70,38 +70,35 @@ pipeline {
                     #!/bin/bash
                     set -e
 
-                    # Create temp known_hosts file inside container
                     mkdir -p ~/.ssh
                     touch ~/.ssh/known_hosts
 
-                    # Add bastion and backend hosts to known_hosts
+                    # Add host keys for bastion and backend
                     ssh-keyscan -H ${BASTION_HOST} >> ~/.ssh/known_hosts
                     ssh-keyscan -H ${BACKEND_HOST} >> ~/.ssh/known_hosts
 
-                    # Step 1: SSH to bastion with agent forwarding
+                    # Step 1: SSH to bastion
                     ssh -A -o UserKnownHostsFile=~/.ssh/known_hosts \
                         -o StrictHostKeyChecking=yes \
                         ${EC2_USER}@${BASTION_HOST} << 'BASTION_EOF'
 
-                        # Step 2: SSH from bastion to private EC2
+                        # Step 2: SSH to private EC2 from bastion
                         ssh -A -o UserKnownHostsFile=~/.ssh/known_hosts \
                             -o StrictHostKeyChecking=yes \
                             ${EC2_USER}@${BACKEND_HOST} << 'EC2_EOF'
 
-                            echo "Deploying backend on private EC2..."
                             mkdir -p ${APP_DIR}/backend
 
                             export AWS_ACCESS_KEY_ID=${AWS_KEY}
                             export AWS_SECRET_ACCESS_KEY=${AWS_SECRET}
                             export AWS_DEFAULT_REGION=${AWS_REGION}
 
-                            # Login to ECR
                             aws ecr get-login-password --region ${AWS_REGION} | \
                                 docker login --username AWS --password-stdin \
                                 ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com
 
-                            # Pull and run backend container
                             docker pull ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}-backend:latest
+
                             docker rm -f ${APP_NAME}-backend || true
                             docker run -d \
                                 --name ${APP_NAME}-backend \
