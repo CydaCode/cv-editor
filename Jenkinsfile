@@ -66,7 +66,7 @@ pipeline {
                     ]) {
 
                         sh '''
-                        ssh -o StrictHostKeyChecking=no \
+                        ssh -A -o StrictHostKeyChecking=no \
                             -o UserKnownHostsFile=/dev/null \
                             -o ProxyJump=${EC2_USER}@${BASTION_HOST} \
                             ${EC2_USER}@${BACKEND_HOST} <<EOF
